@@ -347,4 +347,10 @@ logging.getLogger("server").setLevel(logging.DEBUG)
 
 ## ライセンス
 
-未指定（個人利用前提）。
+MIT License — 詳細は [LICENSE](LICENSE) を参照。
+
+## Acknowledgements
+
+- [SAM3 / SAM 3.1](https://huggingface.co/facebook/sam3) (Meta FAIR) — テキストプロンプト AI セグメンテーション (Apache-2.0)
+- [BiRefNet](https://huggingface.co/zhengpeng7/BiRefNet) (ZhengPeng7) — 背景除去モデル (MIT)、ComfyUI ネイティブ実装 (`comfy.bg_removal_model`) を介して使用  
+  Zheng et al., "Bilateral Reference for High-Resolution Dichotomous Image Segmentation", *CAAI AIR* 2024

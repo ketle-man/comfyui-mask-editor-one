@@ -4,6 +4,123 @@ Mask Editor One の開発記録。新しいエントリは上に追加する。
 
 ---
 
+## 2026-05-27 — MIT ライセンス適用・README Acknowledgements 追加
+
+### 概要
+
+ライセンスを MIT に確定し、依存モデルの帰属情報を README 3言語版に追加した。
+
+### 追加ファイル
+
+- [LICENSE](LICENSE) — MIT License（Copyright 2025 Statsu）
+
+### 変更ファイル
+
+- [README.md](README.md) — ライセンスセクション更新・Acknowledgements 追加
+- [README_en.md](README_en.md) — License 更新・Acknowledgements 追加
+- [README_zh.md](README_zh.md) — 许可证 更新・致谢 追加
+
+### Acknowledgements 記載内容
+
+| 項目 | URL | 備考 |
+|---|---|---|
+| SAM3 / SAM 3.1 (Meta FAIR) | huggingface.co/facebook/sam3 | Apache-2.0 |
+| BiRefNet (ZhengPeng7) | huggingface.co/zhengpeng7/BiRefNet | MIT、ComfyUI ネイティブ実装 (`comfy.bg_removal_model`) 経由で使用 |
+
+---
+
+## 2026-05-27 — GitHub 初回リリース v0.1.0
+
+### 概要
+
+`ketle-man/comfyui-mask-editor-one` として GitHub に公開リポジトリを作成し、v0.1.0 タグでリリースした。
+
+### 作業内容
+
+- `.gitignore` を追加（`__pycache__/`・`*.pyc`・`brushes/`・`.DS_Store` を除外）
+- `git init` → 33 ファイル / 10,455 行を初回コミット
+- `gh repo create` でパブリックリポジトリを作成しプッシュ
+- `gh release create v0.1.0` でリリースを公開
+
+### リンク
+
+- リポジトリ: https://github.com/ketle-man/comfyui-mask-editor-one
+- リリース: https://github.com/ketle-man/comfyui-mask-editor-one/releases/tag/v0.1.0
+
+---
+
+## 2026-05-27 — README スクリーンショット追加・多言語 README 整備
+
+### 概要
+
+`docs/` フォルダに保存した 5 枚のスクリーンキャプチャを README に組み込み、英語・中国語の README を新規作成した。
+
+### 追加ファイル
+
+- [docs/1_node.png](docs/1_node.png) — ノード（画像プレビュー表示）
+- [docs/2_node_mask.png](docs/2_node_mask.png) — ノード（マスクプレビュー表示）
+- [docs/3_mask_editor.png](docs/3_mask_editor.png) — メインエディタ全体
+- [docs/4_menu.png](docs/4_menu.png) — ツールサイドバー
+- [docs/5_brush_library.png](docs/5_brush_library.png) — ブラシライブラリ
+- [README_en.md](README_en.md) — 英語 README（全セクション翻訳）
+- [README_zh.md](README_zh.md) — 中国語 README（全セクション翻訳）
+
+### 変更ファイル
+
+- [README.md](README.md) — 言語リンク追加・ヒーロー画像・各セクションにスクリーンショット挿入
+
+### 画像配置
+
+| 画像 | 配置箇所 |
+|---|---|
+| `3_mask_editor.png` | タイトル直下（ヒーロー） |
+| `4_menu.png` | 「基本」節に右フロート |
+| `1_node.png` + `2_node_mask.png` | 「ノード上の BG ボタン」節の下に横並び |
+| `5_brush_library.png` | 「ブラシライブラリ」節の説明直後 |
+
+各 README の先頭に `[English](README_en.md) | **日本語** | [中文](README_zh.md)` 形式の言語切り替えリンクを配置。
+
+---
+
+## 2026-05-27 — ノードボタン i18n 対応（maskEditor.js）
+
+### 概要
+
+`maskEditor.js` のノード上ボタン（BG・表示切替・Edit Mask）がハードコードされた文字列を使っており i18n 未対応だった問題を修正した。言語切り替え時にモーダル内だけでなくノードウィジェットのラベルも即時更新されるようになった。
+
+### 変更ファイル
+
+- [web/js/editor/i18n.js](web/js/editor/i18n.js) — en/ja/zh に `node.*` キー 4 件を追加
+- [web/js/maskEditor.js](web/js/maskEditor.js) — `t()` をインポート、全ボタンを `t()` 経由に変更、`node._viewWidget` / `node._editMaskWidget` を保存
+- [web/js/editor/MaskEditorModal.js](web/js/editor/MaskEditorModal.js) — `_rebuildWithLang()` でノードウィジェット 3 件を更新
+
+### 追加した i18n キー
+
+| キー | en | ja | zh |
+|---|---|---|---|
+| `node.showImage` | 👁 Show: Image | 👁 表示: 画像 | 👁 显示: 图像 |
+| `node.showMask` | 👁 Show: Mask | 👁 表示: マスク | 👁 显示: 蒙版 |
+| `node.editMask` | ✏️  Edit Mask | ✏️  マスク編集 | ✏️  编辑蒙版 |
+| `node.bgClear` | 🖼 BG ✕ | 🖼 BG ✕ | 🖼 背景 ✕ |
+
+### 実装のポイント
+
+ノードウィジェットは `onNodeCreated` 時に一度だけ生成されるため、言語変更時に自動更新されない。`node._viewWidget` / `node._editMaskWidget` として参照を保存し、`_rebuildWithLang()` の末尾でラベルを書き換え `setDirtyCanvas(true, true)` で再描画することで解決した。
+
+```javascript
+// MaskEditorModal.js — _rebuildWithLang() 末尾
+if (node._viewWidget)
+    node._viewWidget.name = node._previewMode === "image"
+        ? t("node.showImage") : t("node.showMask");
+if (node._bgWidget)
+    node._bgWidget.name = node._bgDataUrl ? t("node.bgClear") : t("footer.bg");
+if (node._editMaskWidget)
+    node._editMaskWidget.name = t("node.editMask");
+node.setDirtyCanvas(true, true);
+```
+
+---
+
 ## 2026-05-27 — i18n 多言語対応（英語・日本語・中国語）
 
 ### 概要

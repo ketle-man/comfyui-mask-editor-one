@@ -313,4 +313,10 @@ Check the ComfyUI terminal log when investigating brush import issues.
 
 ## License
 
-Unspecified (personal use).
+MIT License — see [LICENSE](LICENSE) for details.
+
+## Acknowledgements
+
+- [SAM3 / SAM 3.1](https://huggingface.co/facebook/sam3) (Meta FAIR) — text-prompted AI segmentation (Apache-2.0)
+- [BiRefNet](https://huggingface.co/zhengpeng7/BiRefNet) (ZhengPeng7) — background removal model (MIT), used via ComfyUI's native `comfy.bg_removal_model`  
+  Zheng et al., "Bilateral Reference for High-Resolution Dichotomous Image Segmentation", *CAAI AIR* 2024

@@ -313,4 +313,10 @@ logging.getLogger("server").setLevel(logging.DEBUG)
 
 ## 许可证
 
-未指定（个人使用）。
+MIT License — 详情请参阅 [LICENSE](LICENSE)。
+
+## 致谢
+
+- [SAM3 / SAM 3.1](https://huggingface.co/facebook/sam3) (Meta FAIR) — 文本提示 AI 分割模型 (Apache-2.0)
+- [BiRefNet](https://huggingface.co/zhengpeng7/BiRefNet) (ZhengPeng7) — 背景去除模型 (MIT)，通过 ComfyUI 原生 `comfy.bg_removal_model` 调用  
+  Zheng et al., "Bilateral Reference for High-Resolution Dichotomous Image Segmentation", *CAAI AIR* 2024
