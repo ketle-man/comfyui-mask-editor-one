@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Runtime generated
+brushes/
+
+# OS
+.DS_Store
+Thumbs.db
