@@ -75,6 +75,7 @@ ComfyUI/
 - TorchScript/JIT files (`torch.jit.save`) are automatically skipped
 - Files whose name does not contain `sam3` are not listed
 - If no checkpoint is found, auto-download from HuggingFace (facebook/sam3) is attempted
+- **Gated model**: `facebook/sam3` requires access approval. Accept the license at [huggingface.co/facebook/sam3](https://huggingface.co/facebook/sam3), then run `huggingface-cli login` or set the `HF_TOKEN` environment variable
 
 ### BiRefNet Model Setup (optional)
 

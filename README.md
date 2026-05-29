@@ -75,6 +75,7 @@ ComfyUI/
 - TorchScript/JIT 形式（`torch.jit.save` で保存）のファイルは自動的にスキップされます
 - ファイル名に `sam3` を含まないファイルはリストに表示されません
 - チェックポイントが見つからない場合は HuggingFace（facebook/sam3）から自動ダウンロードを試みます
+- **Gated model の場合**: `facebook/sam3` はアクセス申請が必要です。[huggingface.co/facebook/sam3](https://huggingface.co/facebook/sam3) でライセンスに同意してから `huggingface-cli login` を実行するか、`HF_TOKEN` 環境変数にアクセストークンを設定してください
 
 ### BiRefNet モデルのセットアップ（任意）
 

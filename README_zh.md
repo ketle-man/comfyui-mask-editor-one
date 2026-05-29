@@ -75,6 +75,7 @@ ComfyUI/
 - TorchScript/JIT 格式文件（`torch.jit.save`）自动跳过
 - 文件名不含 `sam3` 的文件不会显示在列表中
 - 未找到检查点时，自动尝试从 HuggingFace（facebook/sam3）下载
+- **Gated model（受限模型）**：`facebook/sam3` 需要申请访问权限。请在 [huggingface.co/facebook/sam3](https://huggingface.co/facebook/sam3) 同意许可协议，然后运行 `huggingface-cli login` 或设置 `HF_TOKEN` 环境变量
 
 ### BiRefNet 模型设置（可选）
 

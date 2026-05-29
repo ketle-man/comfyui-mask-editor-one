@@ -210,6 +210,14 @@ def _load_safetensors_checkpoint(model, path: str) -> None:
     log.info("safetensors checkpoint loaded OK from %s", path)
 
 
+def _is_gated_repo_error(e: Exception) -> bool:
+    """huggingface_hub の GatedRepoError または 401/403 HTTP エラーを判定する。"""
+    if type(e).__name__ in ("GatedRepoError", "RepositoryNotFoundError"):
+        return True
+    msg = str(e).lower()
+    return "gated" in msg or "401" in msg or "403" in msg or "forbidden" in msg or "unauthorized" in msg
+
+
 def load_model(checkpoint_path: str | None = None, model_name: str | None = None, device: str | None = None) -> None:
     global _model, _processor, _loaded_ckpt
 
@@ -270,7 +278,17 @@ def load_model(checkpoint_path: str | None = None, model_name: str | None = None
             }
             if bpe_path:
                 kwargs["bpe_path"] = bpe_path
-            model = build_sam3_image_model(**kwargs)
+            try:
+                model = build_sam3_image_model(**kwargs)
+            except Exception as e:
+                if load_from_hf and _is_gated_repo_error(e):
+                    raise RuntimeError(
+                        "SAM3 モデルはアクセス申請が必要な Gated model です。\n"
+                        "1. https://huggingface.co/facebook/sam3 でライセンスに同意\n"
+                        "2. huggingface-cli login でトークンを設定してください。\n"
+                        "   または HF_TOKEN 環境変数にアクセストークンを設定してください。"
+                    ) from e
+                raise
     finally:
         torch.load = _orig_load
 

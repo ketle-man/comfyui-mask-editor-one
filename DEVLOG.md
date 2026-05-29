@@ -4,6 +4,37 @@ Mask Editor One の開発記録。新しいエントリは上に追加する。
 
 ---
 
+## 2026-05-29 — SAM3 Gated model エラーハンドリング
+
+### 概要
+
+HuggingFace から SAM3 を自動ダウンロードする際に Gated model（アクセス申請が必要なモデル）の場合、401/403 エラーが握りつぶされてスタックトレースがそのままユーザーに表示されていた問題を修正した。
+
+### 変更ファイル
+
+- [sam3_inference.py](sam3_inference.py) — `_is_gated_repo_error()` ヘルパー追加・HF ダウンロード失敗時のエラーハンドリング追加
+- [README.md](README.md) — SAM3 セットアップ節に Gated model の注意書き追加
+- [README_en.md](README_en.md) — 同上（英語）
+- [README_zh.md](README_zh.md) — 同上（中国語）
+
+### 修正内容
+
+`load_model()` の HF ダウンロードパス（`load_from_hf=True` のとき）で `build_sam3_image_model()` を try/except で囲み、`_is_gated_repo_error()` が True を返した場合にユーザーフレンドリーな `RuntimeError` に変換してから再スローする。
+
+```python
+def _is_gated_repo_error(e: Exception) -> bool:
+    if type(e).__name__ in ("GatedRepoError", "RepositoryNotFoundError"):
+        return True
+    msg = str(e).lower()
+    return "gated" in msg or "401" in msg or "403" in msg or "forbidden" in msg or "unauthorized" in msg
+```
+
+エラーメッセージにはライセンス同意ページの URL・`huggingface-cli login`・`HF_TOKEN` 環境変数の 3 つの対処手順を記載する。
+
+`RepositoryNotFoundError` も含めているのは、未認証ユーザーには Gated repo が「見つからない」として返る場合があるため。
+
+---
+
 ## 2026-05-27 — MIT ライセンス適用・README Acknowledgements 追加
 
 ### 概要
