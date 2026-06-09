@@ -10,7 +10,7 @@ import { Sam3Tool } from "./tools/Sam3Tool.js";
 import { BiRefNetTool } from "./tools/BiRefNetTool.js";
 import { BaseTool } from "./tools/BaseTool.js";
 import { BrushLibrary } from "./BrushLibrary.js";
-import { updateNodeMaskPreview } from "../maskEditor.js";
+import { notifyMaskPreviewUpdate } from "./nodeState.js";
 import { t, getLang, setLang } from "./i18n.js";
 
 const CSS_URL = new URL("../../css/maskEditor.css", import.meta.url);
@@ -1970,7 +1970,7 @@ export class MaskEditorModal {
             gCtx.globalCompositeOperation = "source-over";
             return gc;
         };
-        updateNodeMaskPreview(this.node, toGray(alphaMask, this._inverted).toDataURL("image/png"));
+        notifyMaskPreviewUpdate(this.node.id, toGray(alphaMask, this._inverted).toDataURL("image/png"));
 
         this.close();
     }

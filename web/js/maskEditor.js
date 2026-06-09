@@ -1,6 +1,7 @@
 import { app } from "../../../scripts/app.js";
 import { MaskEditorModal } from "./editor/MaskEditorModal.js";
 import { t } from "./editor/i18n.js";
+import { registerMaskPreviewCallback, unregisterMaskPreviewCallback } from "./editor/nodeState.js";
 
 const _modalCache = new Map();
 
@@ -72,6 +73,18 @@ app.registerExtension({
             const node = this;
 
             hideLayerDataWidget(node);
+
+            // ─── マスクプレビューコールバック登録 ──────────
+            registerMaskPreviewCallback(node.id, (maskDataUrl) => {
+                node._maskDataUrl = maskDataUrl;
+                _loadImage(maskDataUrl).then(img => {
+                    node._maskImg = img;
+                    node._previewMode = "mask";
+                    if (node._viewWidget) node._viewWidget.name = t("node.showMask");
+                    _resizeNode(node);
+                    node.setDirtyCanvas(true, true);
+                });
+            });
 
             // ─── 状態 ──────────────────────────────────────
             node._bgDataUrl     = null;   // BG 選択画像の data URL
@@ -176,10 +189,11 @@ app.registerExtension({
             _resizeNode(this);
         };
 
-        // ノード削除時にモーダルキャッシュをクリア
+        // ノード削除時にモーダルキャッシュとコールバックをクリア
         const origOnRemoved = nodeType.prototype.onRemoved;
         nodeType.prototype.onRemoved = function () {
             _modalCache.delete(this.id);
+            unregisterMaskPreviewCallback(this.id);
             if (origOnRemoved) origOnRemoved.apply(this, arguments);
         };
     },
@@ -198,14 +212,3 @@ function _resizeNode(node) {
     node.size[1] = base[1] + (hasPreview ? PREVIEW_H + 8 : 0);
 }
 
-// Apply 後にノードのマスクプレビューを更新するためにモーダルから呼ぶ
-export function updateNodeMaskPreview(node, maskDataUrl) {
-    node._maskDataUrl = maskDataUrl;
-    _loadImage(maskDataUrl).then(img => {
-        node._maskImg = img;
-        node._previewMode = "mask";
-        if (node._viewWidget) node._viewWidget.name = t("node.showMask");
-        _resizeNode(node);
-        node.setDirtyCanvas(true, true);
-    });
-}

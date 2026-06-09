@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-mask-editor-one"
 description = "An advanced mask editor node for ComfyUI featuring brush tools, SAM3 segmentation, and ABR brush library support."
-version = "0.1.4"
+version = "0.1.5"
 
 [project.urls]
 Repository = "https://github.com/ketle-man/comfyui-mask-editor-one"
