@@ -4,6 +4,152 @@ Mask Editor One の開発記録。新しいエントリは上に追加する。
 
 ---
 
+## 2026-06-09 — Apply後プレビューバグ修正（マスク未表示・画像重なり）
+
+### 概要
+
+Apply ボタン押下後にマスクプレビューが表示されず（マスクを作成しても「マスクなし」と同じ状態）、かつノードに画像が重なって表示されるバグを修正した。画像/マスク切り替えボタンを押すと重なりは消えるが、マスクモードに切り替えても何も表示されない状態だった。
+
+### 変更ファイル
+
+- [web/js/editor/nodeState.js](web/js/editor/nodeState.js) — `Map` → `WeakMap`、引数を `nodeId` → `node` オブジェクトに変更
+- [web/js/maskEditor.js](web/js/maskEditor.js) — `registerMaskPreviewCallback(node.id, ...)` → `registerMaskPreviewCallback(node, ...)`、`unregisterMaskPreviewCallback(this.id)` → `(this)`
+- [web/js/editor/MaskEditorModal.js](web/js/editor/MaskEditorModal.js) — `notifyMaskPreviewUpdate(this.node.id, ...)` → `(this.node, ...)`、`_ensureWidgetHidden` から `setSize` 呼び出しを削除
+
+### 根本原因 1 — マスクプレビュー未表示
+
+`onNodeCreated` フック内で `registerMaskPreviewCallback(node.id, callback)` を呼んでいたが、LiteGraph の仕様により **`onNodeCreated` 実行時点では `node.id = -1`**（ノードがグラフに追加される前）。
+
+```
+LiteGraph.createNode(type)  → new NodeClass()  → onNodeCreated() ← id = -1 のまま
+graph.add(node)             → node.id = ++state.lastNodeId       ← ここで正式ID付与
+```
+
+`registerMaskPreviewCallback(-1, fn)` で登録し、Apply 時に `notifyMaskPreviewUpdate(3, data)` を呼ぶため `_callbacks.get(3)` が undefined → コールバックが永遠に呼ばれなかった。
+
+**修正**: `nodeState.js` の `Map` を `WeakMap` に変更し、キーを `nodeId`（数値）から `node`（オブジェクト参照）に変更。WeakMap はオブジェクトが GC されると自動クリアされるため `unregisterMaskPreviewCallback` も不要だが、明示的クリーンアップのため残した。
+
+```javascript
+// nodeState.js — 修正後
+const _callbacks = new WeakMap();
+export function registerMaskPreviewCallback(node, fn) { _callbacks.set(node, fn); }
+export function notifyMaskPreviewUpdate(node, maskDataUrl) {
+    const fn = _callbacks.get(node);
+    if (fn) fn(maskDataUrl);
+}
+```
+
+### 根本原因 2 — Apply後の画像重なり
+
+`_apply()` 内で `_ensureWidgetHidden(widget)` が `this.node.setSize(this.node.computeSize())` を呼んでノードを「自然サイズ」（プレビューなし）にリセットしていた。この時点では `_previewMode = "image"`・`_bgImg` がセット済みのため、`onDrawForeground` が `y = natural_size - PREVIEW_H - margin` の位置（ウィジェット領域）に背景画像を描画してしまった。
+
+```
+_apply() フロー（修正前）:
+1. _ensureWidgetHidden → setSize(computeSize())  ← ノードを自然サイズにリセット
+2. setDirtyCanvas(true) → 即時再描画           ← _bgImg が間違った y に描画 = 重なり
+3. notifyMaskPreviewUpdate → _loadImage().then() ← 非同期でサイズと _previewMode を修正
+```
+
+非同期 `.then()` が正しくサイズを修正するが、コールバック自体が根本原因1で呼ばれていなかったためさらに悪化していた。
+
+**修正**: `_ensureWidgetHidden` から `setSize` 呼び出しを削除。ノードサイズの更新はコールバック内の `_resizeNode` に一元化した。
+
+```javascript
+// _ensureWidgetHidden — 修正後
+_ensureWidgetHidden(widget) {
+    if (widget.element) { ... }
+    widget.draw        = () => {};
+    widget.computeSize = () => [0, -4];
+    // setSize はここでは呼ばない — _resizeNode が正しいサイズを設定する
+}
+```
+
+---
+
+## 2026-06-09 — Comfy Registry 公開・JS拡張バグ修正（v0.1.3〜v0.1.6）
+
+### 概要
+
+`registry.comfy.org` へのノード登録（v0.1.3〜v0.1.5）と、インストール後に発見された JS 拡張バグの修正（v0.1.5/v0.1.6）を実施した。
+
+### 追加・変更ファイル
+
+- [pyproject.toml](pyproject.toml) — Comfy Registry 公開設定
+- [.github/workflows/publish_action.yml](.github/workflows/publish_action.yml) — GitHub Actions 公開ワークフロー
+- [docs/thumb.png](docs/thumb.png) — アイコン画像を 800×400px 以下にリサイズ（PIL thumbnail）
+- [web/js/editor/nodeState.js](web/js/editor/nodeState.js) — 新規作成（循環 import 解消用）
+- [web/js/maskEditor.js](web/js/maskEditor.js) — `onDrawBackground` no-op 追加、nodeState.js 利用に変更
+- [web/js/editor/MaskEditorModal.js](web/js/editor/MaskEditorModal.js) — import 先を nodeState.js に変更
+
+---
+
+### 1. Comfy Registry 公開
+
+#### pyproject.toml
+
+```toml
+[project]
+name = "comfyui-mask-editor-one"
+description = "..."
+version = "0.1.5"
+
+[project.urls]
+Repository = "https://github.com/ketle-man/comfyui-mask-editor-one"
+
+[tool.comfy]
+PublisherId = "statsu"
+DisplayName = "Mask Editor One"
+Icon = "https://raw.githubusercontent.com/ketle-man/comfyui-mask-editor-one/master/docs/thumb.png"
+```
+
+`license` / `requires-python` / `dependencies` は不要（余分なフィールドはエラー原因）。
+
+#### ハマりポイント
+
+| 問題 | 原因 | 修正 |
+|---|---|---|
+| ノード詳細の読み込みエラー（最初） | `pyproject.toml` に不要フィールド・ワークフローがブランチ push トリガー | `publish_action.yml` を参照リポジトリ `comfyui-image-feeder` に合わせて修正 |
+| ノード詳細の読み込みエラー（2回目） | `docs/thumb.png` が 1536×1024px（MAX 800×400px を超過） | PIL `thumbnail((800,400))` で 600×400px にリサイズ（v0.1.4） |
+| CNR インストールエラー（`not a CNR node`） | GitHub Release が未作成 | `gh release create v0.1.4` で作成（GitHub Release は CNR 認識に必須） |
+
+---
+
+### 2. 循環 import 修正 → ボタン表示バグ解消（v0.1.5）
+
+**症状**: インストールしたノードでカスタムボタン（BG・表示切替・Edit Mask）が一切表示されない。
+
+**根本原因**: `maskEditor.js` → `MaskEditorModal.js` → `maskEditor.js` の循環 ES module import が発生し、JS 拡張がサイレントに読み込み失敗していた。
+
+**修正**: 共有状態（マスクプレビューコールバック）を `nodeState.js` に抽出して循環を断ち切った。
+
+```javascript
+// nodeState.js — コールバックレジストリ（循環 import を解消するため分離）
+const _callbacks = new WeakMap();
+export function registerMaskPreviewCallback(node, fn) { ... }
+export function notifyMaskPreviewUpdate(node, maskDataUrl) { ... }
+```
+
+---
+
+### 3. 実行時画像重なり修正 — onDrawBackground no-op（v0.1.6）
+
+**症状**: ノードを実行すると出力画像がノード上に表示され、カスタムプレビュー（BG画像/マスク）に重なる。
+
+**根本原因**: ComfyUI の `litegraphService.ts` が `addDrawBackgroundHandler` で `onDrawBackground` を拡張し、`updatePreviews()` → `nodeOutputStore` から `node.imgs` を毎フレーム設定していた。`onExecuted` で `this.imgs = null` してもすぐ上書きされる。
+
+**修正**: `nodeType.prototype.onDrawBackground` を no-op に設定。ComfyUI の自動プレビューを完全に抑制し、独自描画（`onDrawForeground`）のみを使用する。
+
+```javascript
+// maskEditor.js — beforeRegisterNodeDef 内
+nodeType.prototype.onDrawBackground = function () {
+    // no-op: 独自プレビューは onDrawForeground で描画
+};
+```
+
+`addDrawBackgroundHandler`（litegraphService.ts:608）は prototype チェーンで呼ばれるため、`beforeRegisterNodeDef`（line 614）内でのオーバーライドが優先される。
+
+---
+
 ## 2026-05-29 — SAM3 Gated model エラーハンドリング
 
 ### 概要

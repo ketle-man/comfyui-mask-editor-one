@@ -35,12 +35,24 @@ ComfyUI 用のレイヤーベース・モーダルマスクエディタ。Photos
 
 ## インストール
 
+### ComfyUI Manager（推奨）
+
+ComfyUI Manager の「Install via Git URL」または「Custom Nodes Manager」から以下の URL を入力してインストール：
+
+```
+https://github.com/ketle-man/comfyui-mask-editor-one
+```
+
+または [Comfy Registry](https://registry.comfy.org/publishers/statsu/nodes/comfyui-mask-editor-one) からノード名 **Mask Editor One** を検索してインストールできます。
+
+### 手動インストール
+
 ComfyUI の `custom_nodes/` 配下にこのフォルダを配置：
 
 ```
 ComfyUI/
 └── custom_nodes/
-    └── comfyui-mask-editor/
+    └── comfyui-mask-editor-one/
         ├── __init__.py
         ├── nodes.py
         ├── server.py

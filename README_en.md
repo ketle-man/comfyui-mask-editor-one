@@ -35,12 +35,24 @@ A layer-based modal mask editor for ComfyUI. Create and edit masks with Photosho
 
 ## Installation
 
+### ComfyUI Manager (Recommended)
+
+Install via ComfyUI Manager's "Install via Git URL" or "Custom Nodes Manager" using:
+
+```
+https://github.com/ketle-man/comfyui-mask-editor-one
+```
+
+Or search for **Mask Editor One** on the [Comfy Registry](https://registry.comfy.org/publishers/statsu/nodes/comfyui-mask-editor-one).
+
+### Manual Installation
+
 Place this folder inside ComfyUI's `custom_nodes/` directory:
 
 ```
 ComfyUI/
 └── custom_nodes/
-    └── comfyui-mask-editor/
+    └── comfyui-mask-editor-one/
         ├── __init__.py
         ├── nodes.py
         ├── server.py

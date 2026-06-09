@@ -1970,7 +1970,7 @@ export class MaskEditorModal {
             gCtx.globalCompositeOperation = "source-over";
             return gc;
         };
-        notifyMaskPreviewUpdate(this.node.id, toGray(alphaMask, this._inverted).toDataURL("image/png"));
+        notifyMaskPreviewUpdate(this.node, toGray(alphaMask, this._inverted).toDataURL("image/png"));
 
         this.close();
     }
@@ -1985,9 +1985,8 @@ export class MaskEditorModal {
         // キャンバス描画 + サイズ計算を無効化
         widget.draw        = () => {};
         widget.computeSize = () => [0, -4];
-
-        // ノードサイズを再計算
-        try { this.node.setSize(this.node.computeSize()); } catch { /* ignore */ }
+        // setSize はここでは呼ばない。プレビューコールバック内の _resizeNode が正しいサイズを設定する。
+        // ここで setSize すると自然サイズにリセットされ、_bgImg がウィジェット領域に重なる原因になる。
     }
 
     // ────────────────────────────────────────────

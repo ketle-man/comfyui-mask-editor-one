@@ -1,3 +1,4 @@
+// v0.1.6
 import { app } from "../../../scripts/app.js";
 import { MaskEditorModal } from "./editor/MaskEditorModal.js";
 import { t } from "./editor/i18n.js";
@@ -75,12 +76,14 @@ app.registerExtension({
             hideLayerDataWidget(node);
 
             // ─── マスクプレビューコールバック登録 ──────────
-            registerMaskPreviewCallback(node.id, (maskDataUrl) => {
+            // node オブジェクトをキーにする（onNodeCreated 時点では id=-1 のため id は使わない）
+            registerMaskPreviewCallback(node, (maskDataUrl) => {
                 node._maskDataUrl = maskDataUrl;
                 _loadImage(maskDataUrl).then(img => {
                     node._maskImg = img;
                     node._previewMode = "mask";
-                    if (node._viewWidget) node._viewWidget.name = t("node.showMask");
+                    // mask表示中 → ボタンは「画像に切り替え」を示す
+                    if (node._viewWidget) node._viewWidget.name = t("node.showImage");
                     _resizeNode(node);
                     node.setDirtyCanvas(true, true);
                 });
@@ -133,9 +136,10 @@ app.registerExtension({
             node._bgWidget = bgWidget;
 
             // ─── IMG / MASK 切り替えボタン ─────────────────
-            const viewWidget = node.addWidget("button", t("node.showImage"), null, () => {
+            // ボタン名は「次にクリックすると切り替わる先」を示す
+            const viewWidget = node.addWidget("button", t("node.showMask"), null, () => {
                 node._previewMode = node._previewMode === "image" ? "mask" : "image";
-                viewWidget.name   = node._previewMode === "image" ? t("node.showImage") : t("node.showMask");
+                viewWidget.name   = node._previewMode === "image" ? t("node.showMask") : t("node.showImage");
                 _resizeNode(node);
                 node.setDirtyCanvas(true, true);
             });
@@ -181,6 +185,13 @@ app.registerExtension({
             return r;
         };
 
+        // ComfyUI の自動プレビュー（onDrawBackground → updatePreviews → node.imgs）を抑制
+        // onDrawBackground は毎フレーム呼ばれ nodeOutputStore から node.imgs を設定するため
+        // onExecuted での null クリアでは効果がなく、ここで完全にスキップする必要がある
+        nodeType.prototype.onDrawBackground = function () {
+            // no-op: 独自プレビューは onDrawForeground で描画するため自動プレビューは不要
+        };
+
         // ワークフロー読み込み後も layer_data を非表示に保つ
         const origOnConfigure = nodeType.prototype.onConfigure;
         nodeType.prototype.onConfigure = function (info) {
@@ -193,7 +204,7 @@ app.registerExtension({
         const origOnRemoved = nodeType.prototype.onRemoved;
         nodeType.prototype.onRemoved = function () {
             _modalCache.delete(this.id);
-            unregisterMaskPreviewCallback(this.id);
+            unregisterMaskPreviewCallback(this);
             if (origOnRemoved) origOnRemoved.apply(this, arguments);
         };
     },
