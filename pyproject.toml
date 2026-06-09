@@ -1,0 +1,15 @@
+[project]
+name = "comfyui-mask-editor-one"
+description = "An advanced mask editor node for ComfyUI featuring brush tools, SAM3 segmentation, and ABR brush library support."
+version = "0.1.1"
+license = "MIT"
+requires-python = ">= 3.10"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/ketle-man/comfyui-mask-editor-one"
+
+[tool.comfy]
+PublisherId = "statsu"
+DisplayName = "Mask Editor One"
+Icon = "https://raw.githubusercontent.com/ketle-man/comfyui-mask-editor-one/main/docs/thumb.png"
