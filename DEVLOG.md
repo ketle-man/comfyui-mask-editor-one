@@ -4,6 +4,181 @@ Mask Editor One の開発記録。新しいエントリは上に追加する。
 
 ---
 
+## 2026-06-28 — BiRefNet ステータス表示修正（Remove BG 後に Ready に更新）
+
+### 概要
+
+BiRefNet ツールのステータス表示が Remove BG 実行後も「Model detected (not loaded)」のままになる問題を修正した。ステータス取得を `refreshStatus()` に切り出し、Remove BG 成功後に再呼び出しすることで、モデルロード完了後に即座に「BiRefNet Ready」へ更新されるようにした。
+
+### 変更ファイル
+
+- [web/js/editor/MaskEditorModal.js](web/js/editor/MaskEditorModal.js) — `_buildBiRefNetOptions()` 内のステータス取得を `refreshStatus()` として切り出し、初回表示と Remove BG 成功後の両方で呼び出すよう変更
+
+---
+
+### 根本原因
+
+`_buildBiRefNetOptions()` は呼び出し時に一度だけ `/mask_editor/birefnet/status` を取得し、結果を `statusEl` に表示していた。Remove BG 実行時は `run_inference()` → `load_model()` が呼ばれて `_bg_model` がセットされるが、その後 `statusEl` を更新する処理がなかった。
+
+```
+修正前のフロー:
+1. BiRefNet ツール選択 → 状態取得 → "Model detected (not loaded)"
+2. Remove BG クリック → load_model() → _bg_model = <model>  （推論成功）
+3. statusEl はそのまま → "Model detected (not loaded)" のまま ← バグ
+
+修正後のフロー:
+1. BiRefNet ツール選択 → refreshStatus() → "Model detected (not loaded)"
+2. Remove BG クリック → load_model() → _bg_model = <model>  （推論成功）
+3. refreshStatus() 再呼び出し → loaded: true → "BiRefNet Ready" ✓
+```
+
+### 修正内容
+
+```javascript
+// 修正前: fetch が直接 statusEl を更新（1回のみ）
+fetch("/mask_editor/birefnet/status")
+    .then(r => r.json())
+    .then(s => { statusEl.textContent = ...; });
+
+// 修正後: refreshStatus() に切り出して再利用可能に
+const refreshStatus = () => {
+    fetch("/mask_editor/birefnet/status")
+        .then(r => r.json())
+        .then(s => { statusEl.textContent = ...; })
+        .catch(...);
+};
+refreshStatus();   // 初回
+
+// runRemove() 内で成功後に再呼び出し
+if (!tool.lastError) {
+    this._syncDrawToLayer();
+    this._updatePreview();
+    this._refreshLayerThumbnail();
+    refreshStatus();   // ← 追加
+}
+```
+
+---
+
+## 2026-06-28 — 入力廃止・Load Image ボタン一本化・プレビューエリア常時表示
+
+### 概要
+
+ノードの `image` / `mask` オプション入力を廃止し、画像読み込みを「Load Image」ボタンとノードプレビューエリアへのファイルドロップのみに統一した。読み込んだ画像は自動的に Layer 1（グレースケール→アルファ変換）として生成され、新規画像読み込み時は既存のマスクレイヤーをすべてクリアする。プレビューエリアを BG 有無に関わらず常時 160 px で表示し、ファイルドロップに対応した。
+
+### 変更ファイル
+
+- [nodes.py](nodes.py) — `image` / `mask` optional 入力・関連ヘルパーを削除、`process()` 簡略化
+- [server.py](server.py) — `store_image` エンドポイントを `bg_image_b64` のみに統一
+- [web/js/maskEditor.js](web/js/maskEditor.js) — プレビューエリア常時表示・ドロップ対応・`_graphPos`・`_inPreview`・`_loadFileAsBg` 追加
+- [web/js/editor/MaskEditorModal.js](web/js/editor/MaskEditorModal.js) — `_imageToMaskLayer()`・`reloadBackground()` にレイヤークリア追加
+- [web/js/editor/i18n.js](web/js/editor/i18n.js) — `"footer.bg"` → `"Image"`、`"node.loadImage"` キー追加（en/ja/zh）
+
+---
+
+### 1. `image` / `mask` 入力廃止
+
+ノードの `INPUT_TYPES` から `image (IMAGE)` と `mask (MASK)` の optional 入力を削除した。画像の供給経路を「Load Image」ボタンまたはプレビューエリアへのドロップのみに統一することで、接続経路による動作の混乱を排除する。
+
+```python
+# 修正前
+"optional": {
+    "image":       ("IMAGE",),
+    "mask":        ("MASK",),
+    "layer_data":  ("STRING", {"default": "{}"}),
+    "blur_radius": ("INT", ...),
+}
+
+# 修正後
+"optional": {
+    "layer_data":  ("STRING", {"default": "{}"}),
+    "blur_radius": ("INT", ...),
+}
+```
+
+`process()` はサーバーキャッシュの `bg_image_b64` のみを参照するよう簡略化した。`_tensor_to_pil`・`_mask_tensor_to_pil`・`_image_tensor_to_base64` ヘルパーも削除。
+
+---
+
+### 2. 画像読み込み時の Layer 1 自動生成
+
+BG 画像を読み込むと、画像のグレースケール値をアルファチャンネルに変換した Layer 1 を自動生成するようにした。RGB は白（255,255,255）固定。
+
+```javascript
+// MaskEditorModal.js
+_imageToMaskLayer(img) {
+    const w = this._canvasW, h = this._canvasH;
+    const layer = this._layerMgr.addLayer("paint", t("layers.defaultName", { n: 1 }));
+    const tmp = document.createElement("canvas");
+    tmp.width = w; tmp.height = h;
+    const tmpCtx = tmp.getContext("2d");
+    tmpCtx.drawImage(img, 0, 0, w, h);
+    const src = tmpCtx.getImageData(0, 0, w, h);
+    const out = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < src.data.length; i += 4) {
+        const gray = Math.round(0.299 * src.data[i] + 0.587 * src.data[i + 1] + 0.114 * src.data[i + 2]);
+        out[i] = out[i + 1] = out[i + 2] = 255;
+        out[i + 3] = gray;
+    }
+    layer.ctx.putImageData(new ImageData(out, w, h), 0, 0);
+    return layer;
+}
+```
+
+グレースケール式: ITU-R BT.601 ルミナンス（`0.299R + 0.587G + 0.114B`）。
+
+新規画像読み込み時はレイヤーをクリアしてから `_imageToMaskLayer` を呼ぶ。パスは 3 通り:
+
+| パス | 処理 |
+|---|---|
+| ノードの Load Image ボタン / プレビューエリアドロップ | `layer_data` ウィジェットを `"{}"` にリセット。モーダルが開いていれば `reloadBackground(dataUrl)` を呼び出し |
+| モーダルの Image ドロップゾーン・キャンバスドロップ | `_loadBgFromFile()` — 既存レイヤーを全クリアして `_imageToMaskLayer` を呼び出し |
+| `reloadBackground(dataUrl)` | 既存レイヤーを全クリアして `_imageToMaskLayer` → `_refreshLayerList` → `_loadActiveLayerToDrawCanvas` |
+
+---
+
+### 3. Load Image ボタン・BG ✕ ボタン廃止
+
+ノード上の BG ボタン:
+- **旧**: `🖼 BG` クリックでダイアログ、読み込み後 `🖼 BG ✕` に変わりクリックでクリア
+- **新**: `Load Image` クリックで常にダイアログを開く。クリアボタンを廃止
+
+モーダルのフッタードロップゾーン:
+- ラベルを `"Image"` に変更（en/ja/zh すべて）
+
+ノードボタン:
+- i18n キー `"node.loadImage"` を追加（全言語 `"Load Image"`）
+
+---
+
+### 4. プレビューエリア常時表示・ファイルドロップ
+
+`_resizeNode` でプレビューエリア用の `PREVIEW_H + 8` を常に加算（従来は BG 有無で条件分岐）。`onDrawForeground` でも常に 160 px のエリアを描画し、画像がない場合は破線ボーダー + "Drop image here" テキストを表示する。
+
+プレビューエリアへのドロップは、ComfyUI のキャンバス要素に**キャプチャーフェーズ**（`{ capture: true }`）でリスナーを登録し、`e.stopImmediatePropagation()` で ComfyUI 自身のドロップハンドラより先に処理する。
+
+```javascript
+// グラフ座標変換（ズーム・パン対応）
+function _graphPos(e) {
+    const rect = app.canvas.canvas.getBoundingClientRect();
+    const ds   = app.canvas.ds;
+    const ratio = app.canvas.canvas.width / rect.width;
+    const cx = (e.clientX - rect.left) * ratio;
+    const cy = (e.clientY - rect.top)  * ratio;
+    return [cx / ds.scale - ds.offset[0], cy / ds.scale - ds.offset[1]];
+}
+```
+
+`_inPreview(node, gx, gy)` でグラフ座標がノードのプレビューエリア内かを判定し、ドロップ先がプレビューエリアの場合のみ `stopImmediatePropagation()` を呼ぶ。ノード削除時は `_cleanupDropHandlers()` でリスナーを除去する。
+
+---
+
+### 5. 画像読み込み時のプレビューモード自動切り替え
+
+`_loadFileAsBg()` で `node._previewMode = "image"` にリセットし、表示切り替えボタンのラベルを `t("node.showMask")` に更新する。Apply 後にマスクプレビューに切り替わった状態で新しい画像を読み込んでも、自動的に画像表示に戻る。
+
+---
+
 ## 2026-06-28 — BiRefNet バグ修正（テンソルインデックス誤り）
 
 ### 概要

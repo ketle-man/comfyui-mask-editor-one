@@ -31,7 +31,7 @@ except ImportError:
     except ImportError:
         _HAS_ABR = False
 
-# In-memory cache: {node_id: {"image_b64": str|None, "mask_b64": str|None}}
+# In-memory cache: {node_id: {"bg_image_b64": str|None, ...}}
 _node_cache: dict[str, dict] = {}
 
 # Brush storage directory (inside the plugin folder)
@@ -67,11 +67,6 @@ _MIME_MAP = {
     ".webp": "image/webp",
     ".bmp":  "image/bmp",
 }
-
-
-def store_node_data(node_id: str, image_b64: str | None, mask_b64: str | None):
-    """Called by nodes.py during execution to cache image/mask for the editor."""
-    _node_cache[node_id] = {"image_b64": image_b64, "mask_b64": mask_b64}
 
 
 def _build_brush_tree(directory: pathlib.Path, base: pathlib.Path) -> list:
@@ -120,9 +115,7 @@ if _server_available:
 
         node_id = str(data.get("node_id", ""))
         cached = _node_cache.get(node_id, {})
-        # image 接続がある場合は image_b64、なければ BG ボタンの bg_image_b64 を返す
-        image_b64 = cached.get("image_b64") or cached.get("bg_image_b64")
-        return web.json_response({"image_b64": image_b64, "mask_b64": cached.get("mask_b64")})
+        return web.json_response({"image_b64": cached.get("bg_image_b64"), "mask_b64": None})
 
     @PromptServer.instance.routes.post("/mask_editor/save_result")
     async def save_result(request: web.Request) -> web.Response:
@@ -164,12 +157,7 @@ if _server_available:
 
         node_id = str(data.get("node_id", ""))
         entry = _node_cache.get(node_id, {})
-        # BG ボタンからの画像は bg_image_b64 キーで独立管理
-        if "bg_image_b64" in data:
-            entry["bg_image_b64"] = data.get("bg_image_b64")
-        else:
-            entry["image_b64"] = data.get("image_b64")
-            entry["mask_b64"]  = data.get("mask_b64")
+        entry["bg_image_b64"] = data.get("bg_image_b64")
         _node_cache[node_id] = entry
         return web.json_response({"ok": True})
 

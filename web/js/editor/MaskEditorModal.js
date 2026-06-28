@@ -124,7 +124,11 @@ export class MaskEditorModal {
         this._blurNum.value    = this._blurRadius;
 
         if (this._layerMgr.layers.length === 0) {
-            this._layerMgr.addLayer("paint", t("layers.defaultName", { n: 1 }));
+            if (this._bgImage) {
+                this._imageToMaskLayer(this._bgImage);
+            } else {
+                this._layerMgr.addLayer("paint", t("layers.defaultName", { n: 1 }));
+            }
         }
 
         this._refreshLayerList();
@@ -1188,24 +1192,27 @@ export class MaskEditorModal {
         statusEl.textContent = t("birefnet.checking");
         container.appendChild(statusEl);
 
-        fetch("/mask_editor/birefnet/status")
-            .then(r => r.json())
-            .then(s => {
-                if (s.loaded) {
-                    statusEl.textContent = t("birefnet.ready");
-                    statusEl.style.color = "#4caf50";
-                } else if (s.model_found) {
-                    statusEl.textContent = t("birefnet.detected");
+        const refreshStatus = () => {
+            fetch("/mask_editor/birefnet/status")
+                .then(r => r.json())
+                .then(s => {
+                    if (s.loaded) {
+                        statusEl.textContent = t("birefnet.ready");
+                        statusEl.style.color = "#4caf50";
+                    } else if (s.model_found) {
+                        statusEl.textContent = t("birefnet.detected");
+                        statusEl.style.color = "#ff9800";
+                    } else {
+                        statusEl.textContent = t("birefnet.notFound");
+                        statusEl.style.color = "#f44336";
+                    }
+                })
+                .catch(() => {
+                    statusEl.textContent = t("birefnet.noServer");
                     statusEl.style.color = "#ff9800";
-                } else {
-                    statusEl.textContent = t("birefnet.notFound");
-                    statusEl.style.color = "#f44336";
-                }
-            })
-            .catch(() => {
-                statusEl.textContent = t("birefnet.noServer");
-                statusEl.style.color = "#ff9800";
-            });
+                });
+        };
+        refreshStatus();
 
         // ── Remove BG ボタン ────────────────────────────────────
         const btnRow    = document.createElement("div");
@@ -1229,6 +1236,7 @@ export class MaskEditorModal {
                 this._syncDrawToLayer();
                 this._updatePreview();
                 this._refreshLayerThumbnail();
+                refreshStatus();
             }
             rmBgBtn.disabled       = false;
             spinnerEl.style.display = "none";
@@ -1620,6 +1628,13 @@ export class MaskEditorModal {
         if (!this._overlay || this._overlay.style.display === "none") return;
         if (dataUrl) {
             await this._setBackgroundImage(dataUrl);
+            // 新画像読み込み時は既存レイヤーをすべてクリアして Layer 1 を生成
+            this._layerMgr.layers = [];
+            this._layerMgr.activeIndex = 0;
+            this._layerMgr._emit("change");
+            this._imageToMaskLayer(this._bgImage);
+            this._refreshLayerList();
+            this._loadActiveLayerToDrawCanvas();
         } else {
             await this._loadNodeImage();
         }
@@ -1781,6 +1796,30 @@ export class MaskEditorModal {
     }
 
     // ────────────────────────────────────────────
+    // 画像 → Layer 1 変換（グレースケールをアルファとして使用）
+    // ────────────────────────────────────────────
+
+    _imageToMaskLayer(img) {
+        const w = this._canvasW;
+        const h = this._canvasH;
+        const layer = this._layerMgr.addLayer("paint", t("layers.defaultName", { n: 1 }));
+        const tmp = document.createElement("canvas");
+        tmp.width  = w;
+        tmp.height = h;
+        const tmpCtx = tmp.getContext("2d");
+        tmpCtx.drawImage(img, 0, 0, w, h);
+        const src = tmpCtx.getImageData(0, 0, w, h);
+        const out = new Uint8ClampedArray(w * h * 4);
+        for (let i = 0; i < src.data.length; i += 4) {
+            const gray = Math.round(0.299 * src.data[i] + 0.587 * src.data[i + 1] + 0.114 * src.data[i + 2]);
+            out[i] = out[i + 1] = out[i + 2] = 255;
+            out[i + 3] = gray;
+        }
+        layer.ctx.putImageData(new ImageData(out, w, h), 0, 0);
+        return layer;
+    }
+
+    // ────────────────────────────────────────────
     // BG 画像ロード（ファイルオブジェクトから）
     // ────────────────────────────────────────────
 
@@ -1795,7 +1834,6 @@ export class MaskEditorModal {
         img.src = dataUrl;
         await new Promise(r => { img.onload = r; img.onerror = r; });
         this.node._bgImg = img;
-        if (this.node._bgWidget) this.node._bgWidget.name = "🖼 BG ✕";
         fetch("/mask_editor/store_image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1803,8 +1841,11 @@ export class MaskEditorModal {
         }).catch(() => {});
         // _setBackgroundImage 内で _resizeCanvases が呼ばれ LayerManager のサイズも更新される
         await this._setBackgroundImage(dataUrl);
-        // 画像サイズに合わせた新規レイヤーを追加
-        this._layerMgr.addLayer("paint", t("layers.defaultName", { n: this._layerMgr.layers.length + 1 }));
+        // 既存レイヤーをすべてクリアして画像から Layer 1 を生成
+        this._layerMgr.layers = [];
+        this._layerMgr.activeIndex = 0;
+        this._layerMgr._emit("change");
+        this._imageToMaskLayer(this._bgImage);
         this._loadActiveLayerToDrawCanvas();
         this._renderBg();
         this._updatePreview();
@@ -1891,7 +1932,7 @@ export class MaskEditorModal {
         this._bgImage = null;
         this.node._bgDataUrl = null;
         this.node._bgImg = null;
-        if (this.node._bgWidget) this.node._bgWidget.name = "🖼 BG";
+        if (this.node._bgWidget) this.node._bgWidget.name = t("node.loadImage");
         fetch("/mask_editor/store_image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -2041,7 +2082,7 @@ export class MaskEditorModal {
                 ? t("node.showImage") : t("node.showMask");
         }
         if (node._bgWidget) {
-            node._bgWidget.name = node._bgDataUrl ? t("node.bgClear") : t("footer.bg");
+            node._bgWidget.name = t("node.loadImage");
         }
         if (node._editMaskWidget) {
             node._editMaskWidget.name = t("node.editMask");

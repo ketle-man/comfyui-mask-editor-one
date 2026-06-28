@@ -27,9 +27,9 @@ A layer-based modal mask editor for ComfyUI. Create and edit masks with Photosho
 - **Blur filter** — Gaussian blur adjustable via node widget and modal slider (0–200 px), bidirectional sync
 - **BG drop zone** — Click or drop an image file onto the footer BG zone to set background. Canvas area drop also supported
 - **New canvas** — Create a blank canvas with specified width/height via the `📄 New` toolbar button
-- **Node preview** — Preview the selected background image and applied mask directly on the node
-- **IMG/MASK toggle** — Switch between image and mask preview on the node
-- **Input support** — `IMAGE` / `MASK` inputs (both optional)
+- **Load Image button** — Load an image via the node button or by dropping a file onto the preview area. Automatically generates Layer 1 from the image (grayscale → alpha conversion). Clears existing mask layers on new image load
+- **Node preview** — Always visible (fixed 160 px). Previews the background image or applied mask. Acts as a file drop zone when no image is loaded
+- **IMG/MASK toggle** — Switch between image and mask preview on the node. Automatically switches to image view when a new image is loaded
 - **Out-of-canvas drag** — Drawing continues when the mouse leaves the canvas edge (select all the way to image borders)
 - **i18n (Multilingual)** — Switch between English, Japanese, and Chinese via the language selector in the footer. Setting is saved to `localStorage`
 
@@ -113,7 +113,7 @@ Restart ComfyUI. The **Mask Editor One** node will appear under the `image/maski
 <img src="docs/4_menu.png" width="110" align="right" alt="Tool sidebar">
 
 1. Add the `Mask Editor One` node to your workflow
-2. (Optional) Connect `IMAGE` / `MASK` inputs
+2. Click `Load Image` or drop an image file onto the preview area to load a background image
 3. Click the `Edit Mask` button on the node → the modal editor opens
 4. Select a tool from the left sidebar and draw your mask
 5. Click `Apply` to confirm → run the node to get `image` / `mask` outputs
@@ -124,22 +124,21 @@ Restart ComfyUI. The **Mask Editor One** node will appear under the `image/maski
 |-------|-------------|
 | `invert_mask` | Invert the output mask (black↔white). Bidirectionally synced with the modal Invert checkbox |
 | `blur_radius` | Gaussian blur radius applied to output mask (0–200 px). Bidirectionally synced with the modal slider |
-| `image` | Input image (optional). Takes priority over the BG button image when connected |
-| `mask` | Input mask (optional) |
 | `layer_data` | Editor state JSON (updated automatically) |
 
-### Node BG Button
+### Node Load Image Button
 
 | Action | Result |
 |--------|--------|
-| Click `🖼 BG` | Opens file dialog. Changes to `🖼 BG ✕` after selection |
-| Click `🖼 BG ✕` | Clears the selected BG image |
-| Click `👁 Show: Image` | Switches node preview to mask view |
-| Click `👁 Show: Mask` | Switches node preview to image view |
+| Click `Load Image` | Opens file dialog |
+| Drop onto preview area | Load image by dropping a file onto the node preview area |
+| Click `👁 Show: Mask` | Switches node preview to mask view |
+| Click `👁 Show: Image` | Switches node preview to image view |
 
-- When `image` input is connected it takes priority; disconnecting it falls back to the BG button image
+- Loading an image clears all existing mask layers and auto-generates Layer 1 from the image grayscale
+- Preview automatically switches to image view after loading
 - After Apply, the node automatically switches to mask preview
-- To change BG while the modal is open, use the `🖼 BG` button in the modal footer
+- To change the background while the modal is open, use the `Image` drop zone in the modal footer
 
 <p>
   <img src="docs/1_node.png" width="220" alt="Node — image preview">

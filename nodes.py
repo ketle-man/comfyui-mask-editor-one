@@ -16,20 +16,6 @@ def _pil_to_mask_tensor(pil_image):
     return torch.from_numpy(arr).unsqueeze(0)
 
 
-def _tensor_to_pil(tensor):
-    if tensor.dim() == 4:
-        tensor = tensor[0]
-    arr = (tensor.cpu().numpy() * 255).clip(0, 255).astype(np.uint8)
-    return Image.fromarray(arr, "RGB")
-
-
-def _mask_tensor_to_pil(tensor):
-    if tensor.dim() == 3:
-        tensor = tensor[0]
-    arr = (tensor.cpu().numpy() * 255).clip(0, 255).astype(np.uint8)
-    return Image.fromarray(arr, "L")
-
-
 def _base64_to_pil(b64_str):
     if b64_str.startswith("data:"):
         b64_str = b64_str.split(",", 1)[1]
@@ -98,8 +84,6 @@ class MaskEditorOne:
                 "invert_mask": ("BOOLEAN", {"default": False, "label_on": "inverted", "label_off": "normal"}),
             },
             "optional": {
-                "image": ("IMAGE",),
-                "mask": ("MASK",),
                 "layer_data": ("STRING", {"default": "{}"}),
                 "blur_radius": ("INT", {"default": 0, "min": 0, "max": 200, "step": 1}),
             },
@@ -128,32 +112,23 @@ class MaskEditorOne:
             pass
         return ""
 
-    def process(self, invert_mask=False, image=None, mask=None, layer_data="{}", unique_id=None, blur_radius=0):
-        # image 入力接続を優先、なければ JS側でキャッシュした BG 画像を使用
-        bg_image = image
+    def process(self, invert_mask=False, layer_data="{}", unique_id=None, blur_radius=0):
+        # BG ボタンで保存した bg_image_b64 をサーバーキャッシュから取得
+        bg_image = None
         try:
             from . import server as _srv
             _node_id = str(unique_id) if unique_id is not None else "unknown"
-
             cache = _srv._node_cache.setdefault(_node_id, {})
-            if image is not None:
-                # image 接続がある場合：接続画像を image_b64 に保存（BG 画像とは別キー）
-                cache["image_b64"] = _image_tensor_to_base64(image)
-            else:
-                # image 接続がない場合：BG ボタンで保存した bg_image_b64 を使用
-                bg_b64 = cache.get("bg_image_b64")
-                if bg_b64:
-                    bg_image = _b64_to_tensor(bg_b64)
+            bg_b64 = cache.get("bg_image_b64")
+            if bg_b64:
+                bg_image = _b64_to_tensor(bg_b64)
         except Exception:
             pass
 
-        # デフォルトサイズ
         default_w, default_h = 512, 512
 
         if bg_image is not None:
             _, h, w, _ = bg_image.shape
-        elif mask is not None:
-            _, h, w = mask.shape
         else:
             h, w = default_h, default_w
 
@@ -166,9 +141,6 @@ class MaskEditorOne:
 
         if layers:
             final_mask_pil = _composite_layers(layers, w, h)
-        elif mask is not None:
-            final_mask_pil = _mask_tensor_to_pil(mask[0] if mask.dim() == 3 else mask)
-            final_mask_pil = final_mask_pil.resize((w, h), Image.LANCZOS)
         else:
             final_mask_pil = Image.new("L", (w, h), 0)
 
@@ -190,16 +162,6 @@ class MaskEditorOne:
             out_image = out_mask_image
 
         return (out_image, out_mask, out_inverted_mask, out_mask_image)
-
-
-def _image_tensor_to_base64(tensor):
-    if tensor is None:
-        return None
-    pil = _tensor_to_pil(tensor)
-    buf = io.BytesIO()
-    pil.save(buf, format="PNG")
-    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-    return f"data:image/png;base64,{b64}"
 
 
 NODE_CLASS_MAPPINGS = {

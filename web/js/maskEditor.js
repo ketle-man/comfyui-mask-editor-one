@@ -97,41 +97,16 @@ app.registerExtension({
             node._previewMode   = "image"; // "image" | "mask"
 
             // ─── BG ボタン ─────────────────────────────────
-            const bgWidget = node.addWidget("button", t("footer.bg"), null, () => {
-                if (node._bgDataUrl) {
-                    // 選択済み → クリア
-                    node._bgDataUrl = null;
-                    node._bgImg     = null;
-                    bgWidget.name   = t("footer.bg");
-                    _storeBgImage(node.id, null);
-                    _resizeNode(node);
-                    node.setDirtyCanvas(true, true);
-                    _modalCache.get(node)?.reloadBackground(null);
-                } else {
-                    // 未選択 → ファイル選択ダイアログ
-                    const input = _getBgFileInput();
-                    input.onchange = null;
-                    input.onchange = async (e) => {
-                        const file = e.target.files[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = async (ev) => {
-                            const dataUrl = ev.target.result;
-                            node._bgDataUrl = dataUrl;
-                            node._bgImg     = await _loadImage(dataUrl);
-                            bgWidget.name   = t("node.bgClear");
-                            _storeBgImage(node.id, dataUrl);
-                            if (node._previewMode === "image") {
-                                _resizeNode(node);
-                                node.setDirtyCanvas(true, true);
-                            }
-                            _modalCache.get(node)?.reloadBackground(dataUrl);
-                        };
-                        reader.readAsDataURL(file);
-                        input.value = "";
-                    };
-                    input.click();
-                }
+            const bgWidget = node.addWidget("button", t("node.loadImage"), null, () => {
+                const input = _getBgFileInput();
+                input.onchange = null;
+                input.onchange = async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    await _loadFileAsBg(node, file);
+                    input.value = "";
+                };
+                input.click();
             });
             node._bgWidget = bgWidget;
 
@@ -148,12 +123,9 @@ app.registerExtension({
             // ─── Edit Mask ボタン ──────────────────────────
             node._editMaskWidget = node.addWidget("button", t("node.editMask"), null, () => openMaskEditor(node));
 
-            // ─── プレビュー描画 ────────────────────────────
+            // ─── プレビュー描画（常時表示・ドロップゾーン兼用） ───
             node.onDrawForeground = function (ctx) {
                 if (this.flags.collapsed) return;
-
-                const img = this._previewMode === "mask" ? this._maskImg : this._bgImg;
-                if (!img) return;
 
                 const margin = 6;
                 const x = margin;
@@ -161,24 +133,74 @@ app.registerExtension({
                 const w = this.size[0] - margin * 2;
                 const h = PREVIEW_H;
 
-                // 背景（チェッカー or 黒）
                 ctx.fillStyle = "#111";
                 ctx.fillRect(x, y, w, h);
 
-                // アスペクト比を維持してセンタリング
-                const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
-                const dw    = img.naturalWidth  * scale;
-                const dh    = img.naturalHeight * scale;
-                const dx    = x + (w - dw) / 2;
-                const dy    = y + (h - dh) / 2;
-                ctx.drawImage(img, dx, dy, dw, dh);
+                const img = this._previewMode === "mask" ? this._maskImg : this._bgImg;
+                if (img) {
+                    const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+                    const dw = img.naturalWidth  * scale;
+                    const dh = img.naturalHeight * scale;
+                    const dx = x + (w - dw) / 2;
+                    const dy = y + (h - dh) / 2;
+                    ctx.drawImage(img, dx, dy, dw, dh);
 
-                // モードラベル
-                ctx.fillStyle = "rgba(0,0,0,0.55)";
-                ctx.fillRect(x, y, 52, 16);
-                ctx.fillStyle = "#ccc";
-                ctx.font = "10px sans-serif";
-                ctx.fillText(this._previewMode === "image" ? "IMAGE" : "MASK", x + 4, y + 11);
+                    ctx.fillStyle = "rgba(0,0,0,0.55)";
+                    ctx.fillRect(x, y, 52, 16);
+                    ctx.fillStyle = "#ccc";
+                    ctx.font = "10px sans-serif";
+                    ctx.fillText(this._previewMode === "image" ? "IMAGE" : "MASK", x + 4, y + 11);
+                } else {
+                    ctx.strokeStyle = "#444";
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([4, 4]);
+                    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = "#666";
+                    ctx.font = "12px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText("Drop image here", x + w / 2, y + h / 2);
+                    ctx.textAlign = "left";
+                    ctx.textBaseline = "alphabetic";
+                }
+            };
+
+            // ─── プレビューエリアへのファイルドロップ ─────────
+            const _cnvEl = app.canvas.canvas;
+
+            const _onDragOver = (e) => {
+                if (!e.dataTransfer?.items) return;
+                const hasImg = [...e.dataTransfer.items].some(
+                    it => it.kind === "file" && it.type.startsWith("image/")
+                );
+                if (!hasImg) return;
+                const [gx, gy] = _graphPos(e);
+                if (_inPreview(node, gx, gy)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.dataTransfer.dropEffect = "copy";
+                }
+            };
+
+            const _onDrop = (e) => {
+                const [gx, gy] = _graphPos(e);
+                if (!_inPreview(node, gx, gy)) return;
+                const file = [...(e.dataTransfer?.files ?? [])].find(
+                    f => f.type.startsWith("image/")
+                );
+                if (!file) return;
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                _loadFileAsBg(node, file);
+            };
+
+            _cnvEl.addEventListener("dragover", _onDragOver, { capture: true });
+            _cnvEl.addEventListener("drop",     _onDrop,     { capture: true });
+            node._cleanupDropHandlers = () => {
+                _cnvEl.removeEventListener("dragover", _onDragOver, { capture: true });
+                _cnvEl.removeEventListener("drop",     _onDrop,     { capture: true });
             };
 
             _resizeNode(node);
@@ -200,26 +222,66 @@ app.registerExtension({
             _resizeNode(this);
         };
 
-        // ノード削除時にモーダルキャッシュとコールバックをクリア
+        // ノード削除時にモーダルキャッシュ・コールバック・ドロップハンドラをクリア
         const origOnRemoved = nodeType.prototype.onRemoved;
         nodeType.prototype.onRemoved = function () {
             _modalCache.delete(this.id);
             unregisterMaskPreviewCallback(this);
+            this._cleanupDropHandlers?.();
             if (origOnRemoved) origOnRemoved.apply(this, arguments);
         };
     },
 });
 
-// プレビューの有無に応じてノードをリサイズ
+// プレビューエリアは常時表示 — 常に PREVIEW_H を加算
 function _resizeNode(node) {
-    const hasPreview = !!(
-        (node._previewMode === "image" && node._bgImg) ||
-        (node._previewMode === "mask"  && node._maskImg)
-    );
-
-    // computeSize を一時的にオーバーライドしてプレビュー分を加算
     const base = node.computeSize();
     node.size[0] = base[0];
-    node.size[1] = base[1] + (hasPreview ? PREVIEW_H + 8 : 0);
+    node.size[1] = base[1] + PREVIEW_H + 8;
+}
+
+// イベント座標をグラフ座標に変換
+function _graphPos(e) {
+    const cnv = app.canvas.canvas;
+    const rect = cnv.getBoundingClientRect();
+    const ds   = app.canvas.ds;
+    const ratio = cnv.width / rect.width;
+    const cx = (e.clientX - rect.left) * ratio;
+    const cy = (e.clientY - rect.top)  * ratio;
+    return [cx / ds.scale - ds.offset[0], cy / ds.scale - ds.offset[1]];
+}
+
+// グラフ座標がノードのプレビューエリア内かどうか判定
+function _inPreview(node, gx, gy) {
+    if (node.flags?.collapsed) return false;
+    const m = 6;
+    return (
+        gx >= node.pos[0] + m &&
+        gx <= node.pos[0] + node.size[0] - m &&
+        gy >= node.pos[1] + node.size[1] - PREVIEW_H - m &&
+        gy <= node.pos[1] + node.size[1] - m
+    );
+}
+
+// ファイルを BG 画像として読み込む（ボタン・ドロップ共用）
+async function _loadFileAsBg(node, file) {
+    return new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            const dataUrl = ev.target.result;
+            node._bgDataUrl   = dataUrl;
+            node._bgImg       = await _loadImage(dataUrl);
+            node._previewMode = "image";
+            if (node._viewWidget) node._viewWidget.name = t("node.showMask");
+            _storeBgImage(node.id, dataUrl);
+            const lw = node.widgets?.find(w => w.name === "layer_data");
+            if (lw) lw.value = "{}";
+            _resizeNode(node);
+            node.setDirtyCanvas(true, true);
+            _modalCache.get(node)?.reloadBackground(dataUrl);
+            resolve();
+        };
+        reader.readAsDataURL(file);
+    });
 }
 
