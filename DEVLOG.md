@@ -4,6 +4,44 @@ Mask Editor One の開発記録。新しいエントリは上に追加する。
 
 ---
 
+## 2026-06-28 — BiRefNet バグ修正（テンソルインデックス誤り）
+
+### 概要
+
+Mask Editor の BiRefNet ボタンが正常に機能していなかった原因を特定し修正した。`birefnet_inference.py` のテンソルインデックス誤りにより、マスクが高さ 1px の帯画像として生成されていた。
+
+### 変更ファイル
+
+- [birefnet_inference.py](birefnet_inference.py) — `mask_tensor[0, 0]` → `mask_tensor[0]`
+
+---
+
+### 根本原因 — birefnet_inference.py: テンソルインデックス誤り
+
+`comfy.bg_removal_model.BackgroundRemovalModel.encode_image()` の戻り値は `mask.squeeze(1)` で次元を削減した **`(B, H, W)`** 形式。
+
+```python
+# comfy/bg_removal_model.py:58
+return mask.squeeze(1)  # (B, 1, H, W) → (B, H, W)
+```
+
+しかし `birefnet_inference.py` では `mask_tensor[0, 0]` と 2 次元インデックスでアクセスしていた。
+
+```python
+# 修正前（バグ）
+# コメントも誤り: "戻り値: (1, 1, H, W)"
+mask_np = mask_tensor[0, 0].cpu().float().detach().numpy()
+# → shape (1, H, W) に対して [0, 0] は H 次元の 0 行目 = shape (W,) の 1D 配列
+
+# 修正後
+mask_np = mask_tensor[0].cpu().float().detach().numpy()
+# → shape (H, W) の正しい 2D マスク
+```
+
+`mask_tensor[0, 0]` は幅 W の 1 行分（ほぼ黒）しか含まない 1D 配列になっており、PNG に保存すると高さ 1px の帯画像が生成されていた。
+
+---
+
 ## 2026-06-09 — Apply後プレビューバグ修正（マスク未表示・画像重なり）
 
 ### 概要

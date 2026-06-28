@@ -356,6 +356,7 @@ logging.getLogger("server").setLevel(logging.DEBUG)
 - **ABR v6 Atenais フォーマット対応** — 254 バイト固定プリアンブルを持つ Atenais 製 ABR（05_Flames.abr 等）の循環シフトバグを修正（table_off=320 の BE u16 行カウントテーブル形式）
 - **ブラシジッター** — Size Jitter（Amount スライダーで縮小幅調整）と Rotation Jitter（0°〜360° ランダム回転）をチェックボックスで独立して有効化
 - **i18n 多言語対応** — `i18n.js` モジュールで en/ja/zh の翻訳辞書を管理。フッターの言語セレクターで切り替え時は DOM を再構築してレイヤー状態を保持したまま全 UI テキストを更新。設定は `localStorage` に永続化
+- **BiRefNet バグ修正** — `birefnet_inference.py` のテンソルインデックス誤り（`encode_image()` が `(B, H, W)` を返すのに `[0, 0]` でアクセスし 1 行分しか取れていなかった）を修正。`birefnet_set.json` サブグラフ内の `InvertMask` を削除して前景・背景の逆転を修正
 
 
 ## ライセンス

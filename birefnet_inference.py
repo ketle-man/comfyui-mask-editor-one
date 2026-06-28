@@ -109,10 +109,10 @@ def run_inference(image_pil: Image.Image) -> str:
     image_tensor = torch.from_numpy(rgb).unsqueeze(0)  # (1, H, W, 3)
 
     # comfy.bg_removal_model.encode_image が前処理・推論・後処理を一括で行う。
-    # 戻り値: (1, 1, H, W) float32 マスク [0, 1]
+    # 戻り値: (B, H, W) float32 マスク [0, 1]  ← squeeze(1) 済みで (B,1,H,W) ではない
     mask_tensor = _bg_model.encode_image(image_tensor)
 
-    mask_np = mask_tensor[0, 0].cpu().float().detach().numpy()
+    mask_np = mask_tensor[0].cpu().float().detach().numpy()
     mask_u8 = (mask_np * 255).clip(0, 255).astype(np.uint8)
 
     buf = io.BytesIO()
