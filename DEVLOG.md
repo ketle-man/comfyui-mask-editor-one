@@ -4,6 +4,47 @@ Mask Editor One の開発記録。新しいエントリは上に追加する。
 
 ---
 
+## 2026-06-29 — Workflow Studio 連携（store_image 後方互換・BiRefNet/SAM3/ABRブラシ API 共用）
+
+### 概要
+
+ComfyUI Workflow Studio（WFS）v0.3.64〜v0.3.65 が Mask Editor One の API を活用し、WFS の Image Edit タブに BiRefNet 背景除去・SAM3 セグメンテーション・ABR ブラシライブラリ機能を統合した。これに伴い `/mask_editor/store_image` エンドポイントに旧フィールド名 `image_b64` への後方互換を追加した。
+
+### 変更ファイル
+
+- [server.py](server.py) — `store_image` エンドポイントに旧キー `image_b64` のフォールバックを追加
+
+---
+
+### WFS との API 連携概要
+
+WFS v0.3.64 以降は以下のエンドポイントを直接利用する。Mask Editor One がインストールされていれば追加設定なしで有効になる。
+
+| WFS の機能 | 使用するエンドポイント |
+|---|---|
+| BG Remove (BiRefNet) | `POST /mask_editor/store_image` → `POST /mask_editor/birefnet/remove_bg` |
+| SAM3 セグメンテーション | `POST /mask_editor/store_image` → `POST /mask_editor/sam3/segment` |
+| ABR ブラシライブラリ | `GET /mask_editor/brushes/list` / `GET /mask_editor/brushes/raw` / `POST /mask_editor/brushes/import` / `POST /mask_editor/brushes/upload_abr` |
+
+ブラシは `comfyui-mask-editor-one/brushes/` フォルダを共有するため、一度インポートすれば Mask Editor One と WFS の両方で同じブラシが使える。
+
+---
+
+### store_image 後方互換修正
+
+WFS v0.3.64 が `store_image` 呼び出し時に旧フィールド名 `image_b64` を使用していたため、WFS 側は `bg_image_b64` に修正された（WFS v0.3.65）。Mask Editor One 側でも旧キーへのフォールバックを追加して双方向の互換性を確保した。
+
+```python
+# 修正前
+entry["bg_image_b64"] = data.get("bg_image_b64")
+
+# 修正後: bg_image_b64（現行）と image_b64（旧キー）の両方を受け付ける
+img = data.get("bg_image_b64") or data.get("image_b64")
+entry["bg_image_b64"] = img
+```
+
+---
+
 ## 2026-06-28 — BiRefNet ステータス表示修正（Remove BG 後に Ready に更新）
 
 ### 概要

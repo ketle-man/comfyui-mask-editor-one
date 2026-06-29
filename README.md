@@ -364,6 +364,20 @@ logging.getLogger("server").setLevel(logging.DEBUG)
 - **画像読み込み時プレビューモード自動切り替え** — 新しい画像読み込み時にプレビューが自動的に「画像表示」に切り替わる
 
 
+## Workflow Studio 連携
+
+[ComfyUI Workflow Studio](https://github.com/ketle-man/ComfyUI-Workflow-Studio) がインストールされている場合、WFS の Image Edit タブから Mask Editor One の機能を直接利用できます（WFS v0.3.64 以降）。
+
+| WFS の機能 | 必要な Mask Editor One の設定 |
+|---|---|
+| BG Remove (BiRefNet) | BiRefNet モデルのセットアップ（[BiRefNet モデルのセットアップ](#birefnet-モデルのセットアップ任意)参照） |
+| SAM3 セグメンテーション | SAM3 モデルのセットアップ（[SAM3 モデルのセットアップ](#sam3-モデルのセットアップ任意)参照） |
+| ABR ブラシライブラリ | インストールのみで利用可能 |
+
+ブラシは `comfyui-mask-editor-one/brushes/` フォルダを共有するため、どちらのツールからインポートしても両方で同じブラシが使えます。
+
+Mask Editor One が未インストールの場合、WFS の BiRefNet・SAM3・ABR ブラシ機能は自動的に無効化（グレーアウト）されます。
+
 ## ライセンス
 
 MIT License — 詳細は [LICENSE](LICENSE) を参照。

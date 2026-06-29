@@ -157,7 +157,9 @@ if _server_available:
 
         node_id = str(data.get("node_id", ""))
         entry = _node_cache.get(node_id, {})
-        entry["bg_image_b64"] = data.get("bg_image_b64")
+        # Accept both "bg_image_b64" (current) and "image_b64" (legacy) field names
+        img = data.get("bg_image_b64") or data.get("image_b64")
+        entry["bg_image_b64"] = img
         _node_cache[node_id] = entry
         return web.json_response({"ok": True})
 
