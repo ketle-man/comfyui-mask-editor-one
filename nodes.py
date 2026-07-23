@@ -3,7 +3,7 @@ import base64
 import io
 import numpy as np
 import torch
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 
 
 def _pil_to_tensor(pil_image):
@@ -145,7 +145,7 @@ class MaskEditorOne:
             final_mask_pil = Image.new("L", (w, h), 0)
 
         if invert_mask:
-            final_mask_pil = Image.eval(final_mask_pil, lambda x: 255 - x)
+            final_mask_pil = ImageOps.invert(final_mask_pil)
 
         if blur_radius > 0:
             final_mask_pil = final_mask_pil.filter(ImageFilter.GaussianBlur(radius=blur_radius))

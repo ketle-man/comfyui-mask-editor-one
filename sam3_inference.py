@@ -83,7 +83,19 @@ def find_checkpoint(model_name: str | None = None) -> str | None:
         return None
 
     if model_name:
-        p = sam3_dir / model_name
+        # ファイル名のみを許可する（パス区切り文字や ".." を含む入力は拒否）
+        safe_name = pathlib.Path(model_name).name
+        if safe_name != model_name or safe_name in ("", ".", ".."):
+            log.warning("Rejected unsafe model_name: %r", model_name)
+            return None
+        sam3_dir_resolved = sam3_dir.resolve()
+        p = (sam3_dir_resolved / safe_name).resolve()
+        # 解決後のパスが sam3_dir 配下に収まっているか再確認する（パストラバーサル対策）
+        try:
+            p.relative_to(sam3_dir_resolved)
+        except ValueError:
+            log.warning("Path traversal attempt blocked: %r", model_name)
+            return None
         if p.exists() and not _is_torchscript_archive(str(p)):
             log.info("Using checkpoint: %s", p.name)
             return str(p)
