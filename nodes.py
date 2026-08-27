@@ -1,6 +1,7 @@
 import json
 import base64
 import io
+import os
 import numpy as np
 import torch
 from PIL import Image, ImageFilter, ImageOps
@@ -92,8 +93,8 @@ class MaskEditorOne:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "MASK", "MASK", "IMAGE")
-    RETURN_NAMES = ("image", "mask", "inverted_mask", "mask_image")
+    RETURN_TYPES = ("IMAGE", "MASK", "MASK", "IMAGE", "STRING")
+    RETURN_NAMES = ("image", "mask", "inverted_mask", "mask_image", "filename_stem")
     FUNCTION = "process"
     CATEGORY = "image/masking"
 
@@ -115,11 +116,13 @@ class MaskEditorOne:
     def process(self, invert_mask=False, layer_data="{}", unique_id=None, blur_radius=0):
         # BG ボタンで保存した bg_image_b64 をサーバーキャッシュから取得
         bg_image = None
+        filename = ""
         try:
             from . import server as _srv
             _node_id = str(unique_id) if unique_id is not None else "unknown"
             cache = _srv._node_cache.setdefault(_node_id, {})
             bg_b64 = cache.get("bg_image_b64")
+            filename = str(cache.get("filename", "") or "")
             if bg_b64:
                 bg_image = _b64_to_tensor(bg_b64)
         except Exception:
@@ -161,7 +164,10 @@ class MaskEditorOne:
         else:
             out_image = out_mask_image
 
-        return (out_image, out_mask, out_inverted_mask, out_mask_image)
+        # Output an extension-free source filename for easy save-prefix construction.
+        filename_stem = os.path.splitext(os.path.basename(filename))[0] if filename else ""
+
+        return (out_image, out_mask, out_inverted_mask, out_mask_image, filename_stem)
 
 
 NODE_CLASS_MAPPINGS = {
