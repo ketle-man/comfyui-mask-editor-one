@@ -41,11 +41,15 @@ function hideLayerDataWidget(node) {
 }
 
 // BG 画像をサーバーキャッシュに送信
-function _storeBgImage(nodeId, dataUrl) {
+function _storeBgImage(nodeId, dataUrl, filename = "") {
     fetch("/mask_editor/store_image", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ node_id: String(nodeId), bg_image_b64: dataUrl }),
+        body:    JSON.stringify({
+            node_id: String(nodeId),
+                                bg_image_b64: dataUrl,
+                                filename: filename,
+        }),
     }).catch(() => {});
 }
 
@@ -236,8 +240,16 @@ app.registerExtension({
 // プレビューエリアは常時表示 — 常に PREVIEW_H を加算
 function _resizeNode(node) {
     const base = node.computeSize();
-    node.size[0] = base[0];
-    node.size[1] = base[1] + PREVIEW_H + 8;
+
+    const currentWidth = node.size?.[0] ?? base[0];
+    const currentHeight = node.size?.[1] ?? base[1];
+
+    const minHeight = base[1] + PREVIEW_H + 8;
+
+    // Preserve any manual resizing. Only grow the node if it is too
+    // small to fit the widgets and preview area.
+    node.size[0] = Math.max(currentWidth, base[0]);
+    node.size[1] = Math.max(currentHeight, minHeight);
 }
 
 // イベント座標をグラフ座標に変換
@@ -273,7 +285,7 @@ async function _loadFileAsBg(node, file) {
             node._bgImg       = await _loadImage(dataUrl);
             node._previewMode = "image";
             if (node._viewWidget) node._viewWidget.name = t("node.showMask");
-            _storeBgImage(node.id, dataUrl);
+            _storeBgImage(node.id, dataUrl, file.name);
             const lw = node.widgets?.find(w => w.name === "layer_data");
             if (lw) lw.value = "{}";
             _resizeNode(node);
