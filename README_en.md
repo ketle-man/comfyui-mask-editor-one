@@ -126,6 +126,16 @@ Restart ComfyUI. The **Mask Editor One** node will appear under the `image/maski
 | `blur_radius` | Gaussian blur radius applied to output mask (0–200 px). Bidirectionally synced with the modal slider |
 | `layer_data` | Editor state JSON (updated automatically) |
 
+### Node Outputs
+
+| Output | Description |
+|--------|-------------|
+| `image` | The loaded background image (falls back to `mask_image` when none is loaded) |
+| `mask` | The edited mask (grayscale) |
+| `inverted_mask` | Inverted version of `mask` |
+| `mask_image` | The mask rendered as an RGB image |
+| `filename_stem` | Original filename of the loaded image with the extension stripped, useful for building save-prefix/filename strings |
+
 ### Node Load Image Button
 
 | Action | Result |

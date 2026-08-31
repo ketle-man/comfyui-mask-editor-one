@@ -46,9 +46,9 @@ function _storeBgImage(nodeId, dataUrl, filename = "") {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-            node_id: String(nodeId),
-                                bg_image_b64: dataUrl,
-                                filename: filename,
+            node_id:      String(nodeId),
+            bg_image_b64: dataUrl,
+            filename:     filename,
         }),
     }).catch(() => {});
 }

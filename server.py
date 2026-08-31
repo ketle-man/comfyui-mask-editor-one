@@ -163,8 +163,11 @@ if _server_available:
 
         # Preserve the original source filename supplied by the frontend.
         # nodes.py exposes this later as an extension-free STRING output.
-        filename = str(data.get("filename", "") or "")
-        entry["filename"] = filename
+        # Only overwrite when the caller actually sent one — other callers of
+        # this endpoint (e.g. WFS's BiRefNet/SAM3 integration) omit "filename"
+        # and must not wipe out a previously stored value.
+        if "filename" in data:
+            entry["filename"] = str(data.get("filename") or "")
 
         _node_cache[node_id] = entry
         return web.json_response({"ok": True})
