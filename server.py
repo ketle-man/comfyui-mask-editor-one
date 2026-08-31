@@ -160,6 +160,12 @@ if _server_available:
         # Accept both "bg_image_b64" (current) and "image_b64" (legacy) field names
         img = data.get("bg_image_b64") or data.get("image_b64")
         entry["bg_image_b64"] = img
+
+        # Preserve the original source filename supplied by the frontend.
+        # nodes.py exposes this later as an extension-free STRING output.
+        filename = str(data.get("filename", "") or "")
+        entry["filename"] = filename
+
         _node_cache[node_id] = entry
         return web.json_response({"ok": True})
 
