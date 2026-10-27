@@ -4,6 +4,29 @@ Mask Editor One の開発記録。新しいエントリは上に追加する。
 
 ---
 
+## 2026-10-27 — v0.1.12: ズーム/パン改善・BG画像の永続化（PR #2〜#4）
+
+### 概要
+
+Neocortex87 氏からの PR 3件を取り込んだ。
+
+- #2 マウスホイールズームをカーソル位置中心に変更
+- #3 中ボタンドラッグでキャンバスをパン（中ボタンはツールに渡さない）
+- #4 BG画像を `input/mask_editor/` にアップロードして `node.properties.bg_image` に保存し、ワークフロー切り替え・再読み込み時に復元。ノードのマスクプレビューも `layer_data` から再生成
+
+### #4 への追加修正（Workflow Studio 連携のため）
+
+- `persistBgImage` はアップロード前に古い `bg_image` 参照を破棄し、ファイル名を引数で指定可能に
+- 外部連携用に `node._persistBgDataUrl(dataUrl, filename)` を公開（WFS が `node._bgDataUrl` を直接差し替えた後に参照を同期する）
+- 復元は BG画像 → マスクプレビューの順。`layer_data` に width/height が無い場合は BG画像のサイズを使い、サイズ不明ならスキップ
+- 復元中に別の画像がセットされていたら上書きしない
+
+### 変更ファイル
+
+- [web/js/maskEditor.js](web/js/maskEditor.js)、[web/js/editor/nodeState.js](web/js/editor/nodeState.js)、[web/js/editor/CanvasCompositor.js](web/js/editor/CanvasCompositor.js)、[web/js/editor/MaskEditorModal.js](web/js/editor/MaskEditorModal.js)、[web/css/maskEditor.css](web/css/maskEditor.css)
+
+---
+
 ## 2026-06-29 — Workflow Studio 連携（store_image 後方互換・BiRefNet/SAM3/ABRブラシ API 共用）
 
 ### 概要
