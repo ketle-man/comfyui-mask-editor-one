@@ -36,6 +36,28 @@ export class CanvasCompositor {
     }
 
     /**
+     * ノードプレビュー用の白黒マスク（composite() のアルファを黒背景に合成）
+     * @returns {HTMLCanvasElement}
+     */
+    compositeGray(layers, width, height, inverted) {
+        const alphaMask = this.composite(layers, width, height);
+        const gc = document.createElement("canvas");
+        gc.width = width; gc.height = height;
+        const gCtx = gc.getContext("2d");
+        if (inverted) {
+            gCtx.fillStyle = "white";
+            gCtx.fillRect(0, 0, width, height);
+            gCtx.globalCompositeOperation = "destination-out";
+        } else {
+            gCtx.fillStyle = "black";
+            gCtx.fillRect(0, 0, width, height);
+        }
+        gCtx.drawImage(alphaMask, 0, 0);
+        gCtx.globalCompositeOperation = "source-over";
+        return gc;
+    }
+
+    /**
      * Composite をプレビューキャンバスに描画する（クイックマスクスタイル）
      * @param {HTMLCanvasElement} previewCanvas
      * @param {Layer[]} layers

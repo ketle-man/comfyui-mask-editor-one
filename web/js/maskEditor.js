@@ -2,7 +2,9 @@
 import { app } from "../../../scripts/app.js";
 import { MaskEditorModal } from "./editor/MaskEditorModal.js";
 import { t } from "./editor/i18n.js";
-import { registerMaskPreviewCallback, unregisterMaskPreviewCallback } from "./editor/nodeState.js";
+import { LayerManager } from "./editor/LayerManager.js";
+import { CanvasCompositor } from "./editor/CanvasCompositor.js";
+import { registerMaskPreviewCallback, unregisterMaskPreviewCallback, notifyMaskPreviewUpdate, persistBgImage } from "./editor/nodeState.js";
 
 const _modalCache = new Map();
 
@@ -125,6 +127,12 @@ app.registerExtension({
             node._viewWidget = viewWidget;
 
             // ─── Edit Mask ボタン ──────────────────────────
+            // 外部連携（Workflow Studio 等）が node._bgDataUrl を直接差し替えた後に呼び、
+            // properties.bg_image を同期する（呼ばないと再読み込み時に古い画像が復元される）
+            node._persistBgDataUrl = async (dataUrl, filename = "external_image.png") => {
+                const blob = await (await fetch(dataUrl)).blob();
+                return persistBgImage(node, blob, filename);
+            };
             node._editMaskWidget = node.addWidget("button", t("node.editMask"), null, () => openMaskEditor(node));
 
             // ─── プレビュー描画（常時表示・ドロップゾーン兼用） ───
@@ -224,6 +232,12 @@ app.registerExtension({
             if (origOnConfigure) origOnConfigure.apply(this, arguments);
             hideLayerDataWidget(this);
             _resizeNode(this);
+            // 背景画像の復元を待ってからマスクプレビューを作る（layer_data に width/height が無い場合のサイズ決定に必要）
+            const self = this;
+            (async () => {
+                if (self.properties?.bg_image) await _restoreBgImage(self, self.properties.bg_image);
+                await _restoreMaskPreview(self);
+            })();
         };
 
         // ノード削除時にモーダルキャッシュ・コールバック・ドロップハンドラをクリア
@@ -286,6 +300,7 @@ async function _loadFileAsBg(node, file) {
             node._previewMode = "image";
             if (node._viewWidget) node._viewWidget.name = t("node.showMask");
             _storeBgImage(node.id, dataUrl, file.name);
+            persistBgImage(node, file);
             const lw = node.widgets?.find(w => w.name === "layer_data");
             if (lw) lw.value = "{}";
             _resizeNode(node);
@@ -295,5 +310,41 @@ async function _loadFileAsBg(node, file) {
         };
         reader.readAsDataURL(file);
     });
+}
+
+// ワークフローに保存された参照から BG 画像を復元（input フォルダから読み込み）
+async function _restoreBgImage(node, bg) {
+    const params = new URLSearchParams({ filename: bg.name, subfolder: bg.subfolder, type: "input" });
+    const res = await fetch("/view?" + params).catch(() => null);
+    if (!res?.ok) return;
+    const blob = await res.blob();
+    const dataUrl = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = ev => resolve(ev.target.result);
+        reader.readAsDataURL(blob);
+    });
+    // 復元中に別の画像（外部連携・ユーザー操作）がセットされていたら上書きしない
+    if (node._bgDataUrl) return;
+    node._bgDataUrl = dataUrl;
+    node._bgImg     = await _loadImage(dataUrl);
+    _storeBgImage(node.id, dataUrl, bg.filename);
+    node.setDirtyCanvas(true, true);
+}
+
+// ワークフローに保存された layer_data からマスクプレビューを再生成
+async function _restoreMaskPreview(node) {
+    const value = node.widgets?.find(w => w.name === "layer_data")?.value;
+    let json;
+    try { json = JSON.parse(value); } catch { return; }
+    if (!json?.layers?.length) return;
+    // 外部連携が書いた layer_data は width/height を持たないため、背景画像のサイズを使う
+    const w = json.width  ?? node._bgImg?.naturalWidth;
+    const h = json.height ?? node._bgImg?.naturalHeight;
+    if (!w || !h) return;
+    const layerMgr = new LayerManager(w, h);
+    await layerMgr.fromJSON(json);
+    const inverted = !!node.widgets?.find(w => w.name === "invert_mask")?.value;
+    const gray = new CanvasCompositor().compositeGray(layerMgr.layers, layerMgr.width, layerMgr.height, inverted);
+    notifyMaskPreviewUpdate(node, gray.toDataURL("image/png"));
 }
 
